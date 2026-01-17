@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>EcoStarter Token DApp</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        button { padding: 10px 20px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 4px; }
+        button:hover { background-color: #45a049; }
+        input { padding: 8px; width: 100%; margin-bottom: 10px; box-sizing: border-box; }
+        #status { margin-top: 10px; color: gray; }
+    </style>
+</head>
+<body>
+    <h1>🌱 EcoStarter (GPT) Wallet</h1>
+
+    <div class="card">
+        <h3>Connection</h3>
+        <button id="connectBtn">Connect MetaMask</button>
+        <p><strong>Account:</strong> <span id="accountAddress">Not connected</span></p>
+        <p><strong>Balance:</strong> <span id="tokenBalance">0</span> GPT</p>
+    </div>
+
+    <div class="card">
+        <h3>Transfer Tokens</h3>
+        <label>Recipient Address:</label>
+        <input type="text" id="recipient" placeholder="0x...">
+        
+        <label>Amount (GPT):</label>
+        <input type="number" id="amount" placeholder="10">
+        
+        <button id="transferBtn" disabled>Send Tokens</button>
+        <p id="status"></p>
+    </div>
+
+    <script>
+        // 1. Адрес твоего контракта (из терминала)
+        const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+        // 2. ABI - описание функций контракта (упрощенное)
+        const ABI = [
+            "function name() view returns (string)",
+            "function symbol() view returns (string)",
+            "function balanceOf(address) view returns (uint256)",
+            "function transfer(address to, uint256 amount) returns (bool)",
+            "function decimals() view returns (uint8)",
+            "event Transfer(address indexed from, address indexed to, uint256 value)"
+        ];
+
+        let provider, signer, contract;
+
+        // Функция подключения
+        async function connectWallet() {
+            if (window.ethereum) {
+                try {
+                    // Запрос доступа к аккаунтам
+                    provider = new ethers.BrowserProvider(window.ethereum);
+                    signer = await provider.getSigner();
+                    const address = await signer.getAddress();
+                    
+                    document.getElementById("accountAddress").innerText = address;
+                    document.getElementById("connectBtn").innerText = "Connected";
+                    document.getElementById("transferBtn").disabled = false;
+
+                    // Создаем объект контракта
+                    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+                    // Загружаем баланс
+                    updateBalance(address);
+
+                    // Слушаем события (Real-time updates)
+                    contract.on("Transfer", (from, to, value) => {
+                        if (from === address || to === address) {
+                            updateBalance(address);
+                            document.getElementById("status").innerText = "Transfer detected! Balance updated.";
+                        }
+                    });
+
+                } catch (error) {
+                    console.error(error);
+                    alert("Error connecting wallet!");
+                }
+            } else {
+                alert("Please install MetaMask!");
+            }
+        }
+
+        // Функция обновления баланса
+        async function updateBalance(address) {
+            if (!contract) return;
+            const balance = await contract.balanceOf(address);
+            const decimals = await contract.decimals();
+            // Форматируем из Wei в человеческий вид (18 нулей)
+            const formattedBalance = ethers.formatUnits(balance, decimals);
+            document.getElementById("tokenBalance").innerText = formattedBalance;
+        }
+
+        // Функция отправки токенов
+        async function transferTokens() {
+            const recipient = document.getElementById("recipient").value;
+            const amount = document.getElementById("amount").value;
+            
+            if (!ethers.isAddress(recipient)) {
+                alert("Invalid address!");
+                return;
+            }
+
+            try {
+                document.getElementById("status").innerText = "Processing transaction...";
+                
+                // Конвертируем число в Wei (добавляем 18 нулей)
+                const decimals = await contract.decimals();
+                const amountWei = ethers.parseUnits(amount, decimals);
+
+                // Отправляем транзакцию
+                const tx = await contract.transfer(recipient, amountWei);
+                await tx.wait(); // Ждем подтверждения блока
+
+                document.getElementById("status").innerText = "Success! Transaction Hash: " + tx.hash;
+                
+                // Очистка полей
+                document.getElementById("recipient").value = "";
+                document.getElementById("amount").value = "";
+                
+                // Обновляем баланс
+                const address = await signer.getAddress();
+                updateBalance(address);
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById("status").innerText = "Error: " + (error.reason || error.message);
+            }
+        }
+
+        // Привязываем кнопки
+        document.getElementById("connectBtn").addEventListener("click", connectWallet);
+        document.getElementById("transferBtn").addEventListener("click", transferTokens);
+    </script>
+</body>
+</html>
