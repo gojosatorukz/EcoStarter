@@ -93,5 +93,3 @@ Use one of the Private Keys displayed in the terminal running `npx hardhat node`
 * Rashiduly Bekzat
 * Toilybekov Assylkhan
 * Tolganay Kadirbay
-
-```
